@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Socket.io Chat</title>
+
+</head>
+
+<body>
+
+    <h1>Socket.io Chat</h1>
+
+    <p id="status">
+        Connecting...
+    </p>
+
+    <p id="roomStatus">
+        Not joined to any room
+    </p>
+
+    <hr>
+
+
+    <!-- ONLINE USERS -->
+
+    <h3>Online Users</h3>
+
+    <ul id="onlineUsers"></ul>
+
+
+    <hr>
+
+
+    <!-- TYPING STATUS -->
+
+    <p id="typingStatus"></p>
+
+
+    <!-- MESSAGES -->
+
+    <div id="messages"></div>
+
+
+    <hr>
+
+
+    <!-- MESSAGE INPUT -->
+
+    <input
+        type="text"
+        id="messageInput"
+        placeholder="Type your message..."
+    >
+
+    <button id="sendButton">
+        Send
+    </button>
+
+
+    <script src="/socket.io/socket.io.js"></script>
+
+
+    <script>
+
+        // =====================================
+        // JWT TOKEN
+        // =====================================
+
+        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYzUzMzVhY2QzZmViODkzNTM1ZjY1NCIsIm5hbWUiOiJTbmVoYSIsImVtYWlsIjoic25laGEyNzEzMDdAZ21haWwuY29tIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3OTEzMDk1MzQsImV4cCI6MTc5MTM5NTkzNH0.OarQQjnpOL6VRJCIcm3XaLGja1hTbRiAiJYlce_9U2Q";
+
+
+        // =====================================
+        // SOCKET CONNECTION
+        // =====================================
+
+        const socket = io({
+
+            auth: {
+                token: token
+            }
+
+        });
+
+
+        // =====================================
+        // CONNECT
+        // =====================================
+
+        socket.on("connect", () => {
+
+            console.log(
+                "Connected to server"
+            );
+
+            console.log(
+                "Socket ID:",
+                socket.id
+            );
+
+
+            document.getElementById(
+                "status"
+            ).textContent =
+                "Connected! Socket ID: " +
+                socket.id;
+
+
+            // Join general room
+
+            socket.emit(
+                "chat:join",
+                "general"
+            );
+
+
+            document.getElementById(
+                "roomStatus"
+            ).textContent =
+                "Joined room: general";
+
+        });
+
+
+        // =====================================
+        // CONNECTION ERROR
+        // =====================================
+
+        socket.on(
+            "connect_error",
+            (error) => {
+
+                console.log(
+                    "Connection error:",
+                    error.message
+                );
+
+
+                document.getElementById(
+                    "status"
+                ).textContent =
+                    "Authentication failed: " +
+                    error.message;
+
+            }
+        );
+
+
+        // =====================================
+        // SEND MESSAGE
+        // =====================================
+
+        document.getElementById(
+            "sendButton"
+        ).addEventListener(
+            "click",
+            () => {
+
+                const input =
+                    document.getElementById(
+                        "messageInput"
+                    );
+
+                const text =
+                    input.value.trim();
+
+
+                if (!text) {
+                    return;
+                }
+
+
+                socket.emit(
+                    "chat:message",
+                    text
+                );
+
+
+                input.value = "";
+
+            }
+        );
+
+
+        // =====================================
+        // RECEIVE MESSAGE
+        // =====================================
+
+        socket.on(
+            "chat:message",
+            (message) => {
+
+                const messageElement =
+                    document.createElement(
+                        "p"
+                    );
+
+
+                messageElement.textContent =
+                    `${message.sender}: ${message.text}`;
+
+
+                document.getElementById(
+                    "messages"
+                ).appendChild(
+                    messageElement
+                );
+
+            }
+        );
+
+
+        // =====================================
+        // TYPING START / STOP
+        // =====================================
+
+        const messageInput =
+            document.getElementById(
+                "messageInput"
+            );
+
+
+        let typingTimeout;
+
+
+        messageInput.addEventListener(
+            "input",
+            () => {
+
+                socket.emit(
+                    "chat:typing",
+                    true
+                );
+
+
+                clearTimeout(
+                    typingTimeout
+                );
+
+
+                typingTimeout =
+                    setTimeout(
+                        () => {
+
+                            socket.emit(
+                                "chat:typing",
+                                false
+                            );
+
+                        },
+                        1000
+                    );
+
+            }
+        );
+
+
+        // =====================================
+        // RECEIVE TYPING EVENT
+        // =====================================
+
+        socket.on(
+            "chat:typing",
+            (data) => {
+
+                const typingStatus =
+                    document.getElementById(
+                        "typingStatus"
+                    );
+
+
+                if (data.isTyping) {
+
+                    typingStatus.textContent =
+                        data.user +
+                        " is typing...";
+
+                } else {
+
+                    typingStatus.textContent =
+                        "";
+
+                }
+
+            }
+        );
+
+
+        // =====================================
+        // ONLINE USERS
+        // =====================================
+
+        socket.on(
+            "chat:online-users",
+            (users) => {
+
+                const list =
+                    document.getElementById(
+                        "onlineUsers"
+                    );
+
+
+                list.innerHTML = "";
+
+
+                users.forEach(
+                    (user) => {
+
+                        const item =
+                            document.createElement(
+                                "li"
+                            );
+
+
+                        item.textContent =
+                            user.name;
+
+
+                        list.appendChild(
+                            item
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+
+        // =====================================
+        // USER JOINED
+        // =====================================
+
+        socket.on(
+            "chat:user-joined",
+            (data) => {
+
+                console.log(
+                    `${data.user} joined ${data.room}`
+                );
+
+            }
+        );
+
+
+        // =====================================
+        // USER LEFT
+        // =====================================
+
+        socket.on(
+            "chat:user-left",
+            (data) => {
+
+                console.log(
+                    `${data.user} left ${data.room}`
+                );
+
+            }
+        );
+
+
+        // =====================================
+        // DISCONNECT
+        // =====================================
+
+        socket.on(
+            "disconnect",
+            () => {
+
+                console.log(
+                    "Disconnected from server"
+                );
+
+
+                document.getElementById(
+                    "status"
+                ).textContent =
+                    "Disconnected";
+
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>
